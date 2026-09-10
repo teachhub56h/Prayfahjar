@@ -1,0 +1,8 @@
+<resources>
+    <style name="Theme.PrayerAlarm" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+        <item name="colorPrimary">@color/navy</item>
+        <item name="colorPrimaryVariant">@color/navy2</item>
+        <item name="colorOnPrimary">@color/gold</item>
+        <item name="android:windowBackground">@color/cream</item>
+    </style>
+</resources>
