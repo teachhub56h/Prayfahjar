@@ -1,134 +1,120 @@
 package com.teachhub.prayeralarm;
 
 import android.app.NotificationManager;
+import android.app.PendingIntent;
+import android.content.BroadcastReceiver;
 import android.content.Context;
-import android.media.AudioAttributes;
-import android.media.AudioManager;
-import android.media.MediaPlayer;
-import android.media.RingtoneManager;
-import android.net.Uri;
-import android.os.Build;
-import android.os.Bundle;
-import android.os.VibrationEffect;
-import android.os.Vibrator;
-import android.view.WindowManager;
-import android.widget.Button;
-import android.widget.TextView;
+import android.content.Intent;
+import android.content.SharedPreferences;
 
-import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.app.NotificationCompat;
 
-public class AlarmRingActivity extends AppCompatActivity {
+public class AlarmReceiver extends BroadcastReceiver {
 
-    private MediaPlayer mediaPlayer;
-    private Vibrator vibrator;
+    public static final String CHANNEL_ID = "prayer_alarms_channel";
+    public static final String REMINDER_CHANNEL_ID = "prayer_reminders_channel";
 
     @Override
-    protected void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
-
-        if (Build.VERSION.SDK_INT >= 27) {
-            setShowWhenLocked(true);
-            setTurnScreenOn(true);
+    public void onReceive(Context context, Intent intent) {
+        boolean isCustom = intent.getBooleanExtra("is_custom", false);
+        if (isCustom) {
+            handleCustomAlarm(context, intent);
+            return;
         }
-        getWindow().addFlags(
-                WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED |
-                        WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON |
-                        WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON |
-                        WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD
+
+        boolean isReminder = intent.getBooleanExtra("is_reminder", false);
+        String key = intent.getStringExtra("prayer_key");
+        int mainRequestCode = intent.getIntExtra("main_request_code", 1000);
+        if (key == null) return;
+
+        String label = labelFor(key);
+
+        if (isReminder) {
+            showReminderNotification(context, label, mainRequestCode);
+            SharedPreferences prefs = context.getSharedPreferences(MainActivity.PREFS, Context.MODE_PRIVATE);
+            String time = prefs.getString(key, null);
+            if (time != null) {
+                AlarmScheduler.rescheduleReminderForNextCycle(context, key, time, mainRequestCode);
+            }
+            return;
+        }
+
+        triggerFullAlarm(context, label, mainRequestCode);
+
+        SharedPreferences prefs = context.getSharedPreferences(MainActivity.PREFS, Context.MODE_PRIVATE);
+        String time = prefs.getString(key, null);
+        if (time != null) {
+            AlarmScheduler.scheduleOne(context, key, time, mainRequestCode);
+        }
+    }
+
+    private void handleCustomAlarm(Context context, Intent intent) {
+        int id = intent.getIntExtra("custom_id", 0);
+        String time = intent.getStringExtra("time");
+        String label = intent.getStringExtra("label");
+        if (label == null) label = "Alarm";
+
+        triggerFullAlarm(context, label, id);
+
+        if (time != null) {
+            AlarmScheduler.scheduleCustom(context, id, time, label);
+        }
+    }
+
+    private void triggerFullAlarm(Context context, String label, int requestCode) {
+        Intent fullScreenIntent = new Intent(context, AlarmRingActivity.class);
+        fullScreenIntent.putExtra("prayer_label", label);
+        fullScreenIntent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+
+        PendingIntent fullScreenPendingIntent = PendingIntent.getActivity(
+                context, requestCode, fullScreenIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
         );
 
-        setContentView(R.layout.activity_alarm_ring);
+        NotificationCompat.Builder builder = new NotificationCompat.Builder(context, CHANNEL_ID)
+                .setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
+                .setContentTitle(label + " ka Waqt")
+                .setContentText("Tayyar ho jayein")
+                .setPriority(NotificationCompat.PRIORITY_HIGH)
+                .setCategory(NotificationCompat.CATEGORY_ALARM)
+                .setFullScreenIntent(fullScreenPendingIntent, true)
+                .setAutoCancel(true)
+                .setOngoing(true);
 
-        String label = getIntent().getStringExtra("prayer_label");
-        if (label == null) label = "Namaz";
-
-        TextView title = findViewById(R.id.alarmTitle);
-        title.setText(label + " ki Namaz ka Waqt Ho Gaya");
-
-        Button stopBtn = findViewById(R.id.btnStop);
-        stopBtn.setOnClickListener(v -> stopAndFinish());
-
-        raiseAlarmVolume();
-        playSound();
-        startVibration();
-    }
-
-    private void raiseAlarmVolume() {
-        AudioManager audioManager = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
-        if (audioManager != null) {
-            int max = audioManager.getStreamMaxVolume(AudioManager.STREAM_ALARM);
-            audioManager.setStreamVolume(AudioManager.STREAM_ALARM, max, 0);
+        NotificationManager nm = (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
+        if (nm != null) {
+            nm.notify(requestCode, builder.build());
         }
-    }
 
-    private void playSound() {
-        AudioAttributes attrs = new AudioAttributes.Builder()
-                .setUsage(AudioAttributes.USAGE_ALARM)
-                .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-                .build();
         try {
-            // Use the custom alarm sound bundled with the app
-            mediaPlayer = MediaPlayer.create(this, R.raw.alarm_sound, attrs, 0);
-            if (mediaPlayer != null) {
-                mediaPlayer.setLooping(true);
-                mediaPlayer.start();
-                return;
-            }
-        } catch (Exception ignored) {
-        }
-        // Fallback to the device's default alarm sound if the custom one fails to load
-        try {
-            Uri alarmUri = RingtoneManager.getActualDefaultRingtoneUri(this, RingtoneManager.TYPE_ALARM);
-            if (alarmUri == null) {
-                alarmUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION);
-            }
-            mediaPlayer = new MediaPlayer();
-            mediaPlayer.setDataSource(this, alarmUri);
-            mediaPlayer.setAudioAttributes(attrs);
-            mediaPlayer.setLooping(true);
-            mediaPlayer.prepare();
-            mediaPlayer.start();
+            context.startActivity(fullScreenIntent);
         } catch (Exception ignored) {
         }
     }
 
-    private void startVibration() {
-        vibrator = (Vibrator) getSystemService(Context.VIBRATOR_SERVICE);
-        long[] pattern = {0, 800, 400, 800, 400};
-        if (vibrator != null) {
-            if (Build.VERSION.SDK_INT >= 26) {
-                vibrator.vibrate(VibrationEffect.createWaveform(pattern, 0));
-            } else {
-                vibrator.vibrate(pattern, 0);
-            }
+    private void showReminderNotification(Context context, String label, int mainRequestCode) {
+        NotificationCompat.Builder builder = new NotificationCompat.Builder(context, REMINDER_CHANNEL_ID)
+                .setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
+                .setContentTitle(label + " ki Namaz 15 minute mein")
+                .setContentText("Tayyar ho jayein")
+                .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+                .setAutoCancel(true);
+
+        NotificationManager nm = (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
+        if (nm != null) {
+            nm.notify(mainRequestCode + AlarmScheduler.REMINDER_OFFSET, builder.build());
         }
     }
 
-    private void stopAndFinish() {
-        if (mediaPlayer != null) {
-            try {
-                mediaPlayer.stop();
-                mediaPlayer.release();
-            } catch (Exception ignored) {
-            }
-            mediaPlayer = null;
+    private String labelFor(String key) {
+        switch (key) {
+            case "fajr": return "Fajr";
+            case "zuhr": return "Zuhr";
+            case "asr": return "Asr";
+            case "maghrib": return "Maghrib";
+            case "isha": return "Isha";
+            case "jumma": return "Jumma";
+            default: return "Namaz";
         }
-        if (vibrator != null) vibrator.cancel();
-        NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
-        if (nm != null) nm.cancelAll();
-        finish();
-    }
-
-    @Override
-    protected void onDestroy() {
-        super.onDestroy();
-        if (mediaPlayer != null) {
-            try {
-                mediaPlayer.stop();
-                mediaPlayer.release();
-            } catch (Exception ignored) {
-            }
-        }
-        if (vibrator != null) vibrator.cancel();
     }
 }
