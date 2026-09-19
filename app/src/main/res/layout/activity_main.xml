@@ -217,9 +217,44 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginTop="24dp"
-            android:text="App band ya phone lock ho, alarm phir bhi bajega."
+            android:text="App band ya phone lock ho, alarm phir bhi bajega. Har namaz se 15 minute pehle reminder bhi aayega."
             android:textColor="@color/navy2"
             android:textSize="12sp"/>
+
+        <Button
+            android:id="@+id/btnChangeRingtone"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="20dp"
+            android:text="🔔 Change Alarm Ringtone"
+            android:backgroundTint="@color/navy"
+            android:textColor="@color/gold"/>
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="28dp"
+            android:layout_marginBottom="10dp"
+            android:text="Extra Alarms"
+            android:textColor="@color/navy"
+            android:textSize="18sp"
+            android:textStyle="bold"/>
+
+        <LinearLayout
+            android:id="@+id/customAlarmsContainer"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"/>
+
+        <Button
+            android:id="@+id/btnAddCustomAlarm"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:layout_marginBottom="20dp"
+            android:text="+ Add Custom Alarm"
+            android:backgroundTint="@color/navy"
+            android:textColor="@color/gold"/>
 
     </LinearLayout>
 </ScrollView>
